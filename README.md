@@ -1,5 +1,5 @@
 # wgscribe
-This script lets you connect to Windscribe VPN servers through WireGuard.
+This script lets you connect to Windscribe VPN servers through WireGuard. Heavily inspired by wgnord.
 
 ```
 Usage: wgscribe [ l(ogin) | c(onnect) | d(isconnect) | a(ccount) | s(tatus) ]
@@ -91,4 +91,4 @@ Country names and codes are case-insensitive. See `countries.txt` for a list of 
 This script includes a kill-switch because of the way wg-quick works. Connections will typically stay alive for multiple days, but if it dies you can reconnect by running another connect command.
 
 ## Note
-This third-party project is in no way affiliated with Windscribe.
+This third-party project is in no way affiliated with Windscribe, nor wgnord.
