@@ -1,0 +1,221 @@
+#!/bin/sh
+conf_dir=/var/lib/wgscribe
+alias print="printf \"\033[32m%s\n\033[0m\""
+alias print_error="printf \"\033[31m%s\n\033[0m\""
+
+check_root() {
+	if [ "$(id -u)" -ne 0 ]; then
+		echo "This script must be run as root"
+		exit 1
+	fi
+}
+
+login() {
+	[ -z "$1" ] && help
+	if [ ! -f "$1" ]; then
+		print_error "File not found: $1"
+		exit 1
+	fi
+	private_key="$(grep "^PrivateKey" "$1" | sed 's/^[^=]*= *//' | tr -d '\r')"
+	address="$(grep "^Address" "$1" | sed 's/^[^=]*= *//' | tr -d '\r')"
+	dns="$(grep "^DNS" "$1" | sed 's/^[^=]*= *//' | tr -d '\r')"
+	preshared_key="$(grep "^PresharedKey" "$1" | sed 's/^[^=]*= *//' | tr -d '\r')"
+	mkdir -p "$conf_dir"
+	jq -n \
+		--arg pk "$private_key" \
+		--arg psk "$preshared_key" \
+		--arg addr "$address" \
+		--arg dns "$dns" \
+		'{"private_key":$pk,"preshared_key":$psk,"address":$addr,"dns":$dns}' \
+		> "$conf_dir/credentials.json"
+	print "Credentials imported successfully"
+	print "Address: $address"
+}
+
+account() {
+	if [ ! -f "$conf_dir/credentials.json" ]; then
+		print_error "No credentials found, run: wgscribe login /path/to/windscribe.conf"
+		exit 1
+	fi
+	echo "Address: $(jq -r '.address' "$conf_dir/credentials.json")"
+	echo "DNS: $(jq -r '.dns' "$conf_dir/credentials.json")"
+	echo "PresharedKey: $(jq -r 'if .preshared_key == "" then "not set" else "set" end' "$conf_dir/credentials.json")"
+	echo "Imported: $(stat -c %y "$conf_dir/credentials.json" 2>/dev/null || stat -f %Sm "$conf_dir/credentials.json" 2>/dev/null)"
+}
+
+is_connected() {
+	ip link show wgscribe > /dev/null 2>&1
+}
+
+get_server() {
+	# $1 = country input (code, name, or short_name)
+	# $2 = optional city filter
+	# Sets: server_pubkey, server_ip, server_city, server_country
+	# Returns: 0 on success, 1 on failure
+	serverlist="$(curl -s "https://assets.windscribe.com/serverlist/mob-v2/1/$(date +%s)")"
+	if [ -z "$serverlist" ]; then
+		print_error "Failed to fetch server list"
+		return 1
+	fi
+
+	country_input="$1"
+	city_input="$2"
+
+	location="$(printf '%s' "$serverlist" | jq -r --arg q "$country_input" '
+		.data[] | select(
+			(.country_code | ascii_downcase) == ($q | ascii_downcase) or
+			(.short_name | ascii_downcase) == ($q | ascii_downcase) or
+			(.name | ascii_downcase | test($q | ascii_downcase))
+		)' | jq -s '.[0]')"
+
+	if [ -z "$location" ] || [ "$location" = "null" ]; then
+		print_error "No servers found for: $1"
+		return 1
+	fi
+
+	server_country="$(printf '%s' "$location" | jq -r '.name')"
+
+	if [ -n "$city_input" ]; then
+		groups="$(printf '%s' "$location" | jq -r --arg city "$city_input" '
+			.groups[] | select(.city | ascii_downcase | test($city | ascii_downcase))' | jq -s '.')"
+		if [ "$(printf '%s' "$groups" | jq -r 'length')" = "0" ]; then
+			print_error "No city matching '$city_input' found in $server_country"
+			print_error "Try: wgscribe c $country_input (without city) to see available servers"
+			return 1
+		fi
+	else
+		groups="$(printf '%s' "$location" | jq -r '.groups')"
+	fi
+
+	best_group="$(printf '%s' "$groups" | jq -r '
+		[.[] | select(.health >= 0 and (.nodes | map(select(.force_disconnect != 1)) | length) > 0)]
+		| sort_by(.health) | .[0]')"
+
+	if [ -z "$best_group" ] || [ "$best_group" = "null" ]; then
+		best_group="$(printf '%s' "$groups" | jq -r '.[0]')"
+	fi
+
+	server_pubkey="$(printf '%s' "$best_group" | jq -r '.wg_pubkey')"
+	server_city="$(printf '%s' "$best_group" | jq -r '.city')"
+
+	server_ip="$(printf '%s' "$best_group" | jq -r '
+		.nodes | map(select(.force_disconnect != 1)) | .[0].ip3')"
+
+	if [ -z "$server_ip" ] || [ "$server_ip" = "null" ]; then
+		print_error "No valid WireGuard nodes found for: $1"
+		return 1
+	fi
+
+	return 0
+}
+
+connect() {
+	[ -z "$1" ] && help
+	[ ! -f "$conf_dir/credentials.json" ] && {
+		print_error "$conf_dir/credentials.json doesn't exist, are you logged in?"
+		exit 1
+	}
+	out_file=/etc/wireguard/wgscribe.conf
+	port=443
+	country=""
+	city=""
+	while [ $# -gt 0 ]; do
+		case "$1" in
+			-f) shift ;;
+			-n) dont_act=1; shift ;;
+			-o) out_file="$2"; shift 2 ;;
+			-p) port="$2"; shift 2 ;;
+			-*) exit 1 ;;
+			*)
+				if [ -z "$country" ]; then
+					country="$1"
+				else
+					city="${city:+$city }$1"
+				fi
+				shift ;;
+		esac
+	done
+	[ -z "$country" ] && help
+
+	print "Finding best server..."
+	get_server "$country" "$city" || exit 1
+
+	privkey="$(jq -j '.private_key' "$conf_dir/credentials.json")"
+	preshared_key="$(jq -j '.preshared_key' "$conf_dir/credentials.json")"
+	address="$(jq -j '.address' "$conf_dir/credentials.json")"
+	dns="$(jq -j '.dns' "$conf_dir/credentials.json")"
+
+	endpoint="${server_ip}:${port}"
+
+	sed -e "s|PRIVKEY|$privkey|" \
+		-e "s|PRESHARED_KEY|$preshared_key|" \
+		-e "s|ADDRESS|$address|" \
+		-e "s|DNS_SERVERS|$dns|" \
+		-e "s|SERVER_PUBKEY|$server_pubkey|" \
+		-e "s|ENDPOINT|$endpoint|" \
+		"$conf_dir/template.conf" > "$out_file"
+
+	if [ ! "$dont_act" ]; then
+		print "Connecting to $server_city ($server_country)..."
+		if is_connected; then
+			wg-quick strip wgscribe | wg setconf wgscribe /dev/stdin
+			wg set wgscribe fwmark 0xca6c
+		else
+			wg-quick up wgscribe
+			wg set wgscribe fwmark 0xca6c
+		fi && print "Connected successfully!"
+	else
+		print "Config written to $out_file"
+		print "Server: $server_city ($server_country) — $endpoint"
+	fi
+}
+
+disconnect() {
+	print "Disconnecting..."
+	wg-quick down wgscribe
+}
+
+status() {
+	if is_connected; then
+		server_ip="$(wg show wgscribe endpoints | awk '{print $2}')"
+		print "Connected to: $server_ip"
+	else
+		print_error "No active VPN connection"
+	fi
+}
+
+help() { cat << EOF
+Usage: wgscribe [ l(ogin) | c(onnect) | d(isconnect) | a(ccount) | s(tatus) ]
+
+login:
+    wgscribe l /path/to/windscribe.conf
+    Download a WireGuard config from windscribe.com/getconfig/wireguard
+connect:
+    wgscribe c us
+    wgscribe c us atlanta
+    -f            Force server list refresh
+    -n            Don't connect, just generate config
+    -o out.conf   Write config to different file
+    -p port       Use specific port (default: 443)
+disconnect:
+    wgscribe d
+account:
+    wgscribe a
+    Prints information about the imported credentials
+status:
+    wgscribe s
+    Prints current VPN connection status
+
+wgscribe's files are in $conf_dir, edit template.conf to change WireGuard options
+EOF
+	exit
+}
+
+case $1 in
+	l|login) check_root; login "$2" ;;
+	c|connect) check_root; shift; connect "$@" ;;
+	d|disconnect) check_root; disconnect ;;
+	a|account) check_root; account ;;
+	s|status) check_root; status ;;
+	*) help ;;
+esac

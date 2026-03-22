@@ -1,80 +1,94 @@
-# wgnord
-This script lets you connect to NordVPN servers through WireGuard using their "NordLynx" protocol.
+# wgscribe
+This script lets you connect to Windscribe VPN servers through WireGuard.
 
 ```
-Usage: wgnord [ l(ogin) | c(onnect) | d(isconnect) | a(ccount) ]
+Usage: wgscribe [ l(ogin) | c(onnect) | d(isconnect) | a(ccount) | s(tatus) ]
 
 login:
-    wgnord l "your_token"
-    You can generate a (permament) token in the NordVPN dashboard
+    wgscribe l /path/to/windscribe.conf
+    Download a WireGuard config from windscribe.com/getconfig/wireguard
 connect:
-    wgnord c france
-    -f            Refresh cached longitude/latitude
-    -n            Don't connect
+    wgscribe c us
+    wgscribe c us atlanta
+    -f            Force server list refresh
+    -n            Don't connect, just generate config
     -o out.conf   Write config to different file
+    -p port       Use specific port (default: 443)
 disconnect:
-    wgnord d
+    wgscribe d
 account:
-    wgnord a
-    Prints information about the currently logged in account
+    wgscribe a
+    Prints information about the imported credentials
+status:
+    wgscribe s
+    Prints current VPN connection status
 
-wgnord's files are in /var/lib/wgnord, edit template.conf to change Wireguard options
+wgscribe's files are in /var/lib/wgscribe, edit template.conf to change WireGuard options
 ```
 
 ## Installation
 
-Dependencies: 
+Dependencies:
 
 - jq
 - curl
 - wg-quick (wireguard-tools)
-- openresolv (for dns)
+- openresolv (for DNS)
 
-To install them on Arch:
-```
-sudo pacman -S --needed jq curl wireguard-tools openresolv
-```
+### Nix
 
-Manual installation:
 ```
-git clone https://github.com/phirecc/wgnord
-cd wgnord
-install -Dm644 template.conf /var/lib/wgnord/template.conf
-install -Dm644 countries.txt /var/lib/wgnord/countries.txt
-install -Dm644 countries_iso31662.txt /var/lib/wgnord/countries_iso31662.txt
-sudo install -Dm755 wgnord /usr/bin/wgnord
+nix build github:phirecc/wgscribe
 ```
 
-`wgnord` can also be installed through the AUR like so:
+Or add to your flake:
+```nix
+inputs.wgscribe.url = "github:phirecc/wgscribe";
 ```
-paru -S wgnord
+
+### Manual installation
+
+```
+git clone https://github.com/phirecc/wgscribe
+cd wgscribe
+install -Dm644 template.conf /var/lib/wgscribe/template.conf
+install -Dm644 countries.txt /var/lib/wgscribe/countries.txt
+sudo install -Dm755 wgscribe /usr/bin/wgscribe
 ```
 
 ## Usage
-Login (you only need to do this once):
-```
-sudo wgnord l "your_token"
-```
 
-You can generate a (permament) token in the NordVPN dashboard under `Access token > Generate new
-token`
+First, download a WireGuard config from [windscribe.com/getconfig/wireguard](https://windscribe.com/getconfig/wireguard) (requires a Windscribe Pro account).
+
+Import the config (you only need to do this once):
+```
+sudo wgscribe l /path/to/downloaded.conf
+```
 
 Now you can connect to a server:
 ```
-sudo wgnord c France
+sudo wgscribe c us
 ```
 
-Note: country names are case-insensitive and grepped for, so `sudo wgnord c fra` would work aswell. See `countries.txt` for a list of available countries.
+Connect to a specific city:
+```
+sudo wgscribe c us atlanta
+```
+
+Use a specific port (default is 443):
+```
+sudo wgscribe c de -p 53
+```
 
 To disconnect:
 ```
-sudo wgnord d
+sudo wgscribe d
 ```
 
-If you want to change WireGuard config parameters (MTU, DNS, etc.), simply modify `/var/lib/wgnord/template.conf`.
+Country names and codes are case-insensitive. See `countries.txt` for a list of available locations.
 
 ## Extra
-This script includes a "kill-switch" because of the way wg-quick works. Connections will typically stay alive for multiple days, but if it dies you can reconnect by running another connect command.
+This script includes a kill-switch because of the way wg-quick works. Connections will typically stay alive for multiple days, but if it dies you can reconnect by running another connect command.
 
 ## Note
-This third-party project is in no way affiliated with NordVPN.
+This third-party project is in no way affiliated with Windscribe.
