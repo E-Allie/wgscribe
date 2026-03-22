@@ -38,18 +38,18 @@ Dependencies:
 ### Nix
 
 ```
-nix build github:phirecc/wgscribe
+nix build github:E-Allie/wgscribe
 ```
 
 Or add to your flake:
 ```nix
-inputs.wgscribe.url = "github:phirecc/wgscribe";
+inputs.wgscribe.url = "github:E-Allie/wgscribe";
 ```
 
 ### Manual installation
 
 ```
-git clone https://github.com/phirecc/wgscribe
+git clone https://github.com/E-Allie/wgscribe
 cd wgscribe
 install -Dm644 template.conf /var/lib/wgscribe/template.conf
 install -Dm644 countries.txt /var/lib/wgscribe/countries.txt
