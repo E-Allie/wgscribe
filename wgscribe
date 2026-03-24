@@ -73,16 +73,15 @@ get_server() {
 		return 1
 	fi
 
-	server_country="$(printf '%s' "$locations" | jq -r '.[0].name')"
-
-	# Merge groups from ALL matching sub-locations into one array
-	groups="$(printf '%s' "$locations" | jq '[.[].groups[]]')"
+	# Merge groups from ALL matching sub-locations into one array,
+	# tagging each group with its parent location name for display
+	groups="$(printf '%s' "$locations" | jq '[.[] | .name as $loc | .groups[] | . + {_location_name: $loc}]')"
 
 	if [ -n "$city_input" ]; then
 		groups="$(printf '%s' "$groups" | jq --arg city "$city_input" '
 			[.[] | select(.city | ascii_downcase | test($city | ascii_downcase))]')"
 		if [ "$(printf '%s' "$groups" | jq 'length')" = "0" ]; then
-			print_error "No city matching '$city_input' found in $server_country"
+			print_error "No city matching '$city_input' found for: $country_input"
 			print_error "Try: wgscribe c $country_input (without city) to see available servers"
 			return 1
 		fi
@@ -142,6 +141,7 @@ get_server() {
 
 	server_pubkey="$(printf '%s' "$best_group" | jq -r '.wg_pubkey')"
 	server_city="$(printf '%s' "$best_group" | jq -r '.city')"
+	server_country="$(printf '%s' "$best_group" | jq -r '._location_name')"
 
 	# Weighted random node selection
 	server_ip="$(printf '%s' "$best_group" | jq -r '
