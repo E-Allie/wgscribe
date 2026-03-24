@@ -14,8 +14,10 @@
           "nick": "Piedmont",
           "pro": 1,
           "ping_ip": "154.47.28.129",
+          "ping_host": "http://us-east-107.whiskergalaxy.com:6464/latency",
           "wg_pubkey": "v8yTgxOMZnKqBSPa1tZbNBMpPkYmBwHXqnMFGKL2abc=",
           "health": 5,
+          "link_speed": "10000",
           "nodes": [
             {
               "ip": "154.47.28.129",
@@ -23,7 +25,7 @@
               "ip3": "154.47.28.131",
               "hostname": "us-east-107.whiskergalaxy.com",
               "weight": 1,
-              "force_disconnect": 0
+              "force_disconnect": null
             },
             {
               "ip": "154.47.28.132",
@@ -31,7 +33,7 @@
               "ip3": "154.47.28.134",
               "hostname": "us-east-108.whiskergalaxy.com",
               "weight": 1,
-              "force_disconnect": 0
+              "force_disconnect": null
             }
           ]
         },
@@ -41,8 +43,10 @@
           "nick": "Empire",
           "pro": 1,
           "ping_ip": "198.54.128.1",
+          "ping_host": "http://us-east-201.whiskergalaxy.com:6464/latency",
           "wg_pubkey": "xK9mNpQrStUvWxYzAbCdEfGhIjKlMnOpQrStUvWxYz=",
           "health": 12,
+          "link_speed": "10000",
           "nodes": [
             {
               "ip": "198.54.128.1",
@@ -50,7 +54,54 @@
               "ip3": "198.54.128.3",
               "hostname": "us-east-201.whiskergalaxy.com",
               "weight": 1,
-              "force_disconnect": 0
+              "force_disconnect": null
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 66,
+      "name": "US West",
+      "country_code": "US",
+      "short_name": "US-W",
+      "premium_only": 0,
+      "p2p": 1,
+      "groups": [
+        {
+          "id": 401,
+          "city": "Los Angeles",
+          "nick": "Hollywood",
+          "pro": 0,
+          "ping_ip": "192.0.2.1",
+          "ping_host": "http://us-west-001.whiskergalaxy.com:6464/latency",
+          "wg_pubkey": "aB1cD2eF3gH4iJ5kL6mN7oP8qR9sT0uV1wX2yZ3aB4=",
+          "health": 3,
+          "link_speed": "10000",
+          "nodes": [
+            {
+              "ip": "192.0.2.1",
+              "ip2": "192.0.2.2",
+              "ip3": "192.0.2.3",
+              "hostname": "us-west-001.whiskergalaxy.com",
+              "weight": 3,
+              "force_disconnect": null
+            },
+            {
+              "ip": "192.0.2.4",
+              "ip2": "192.0.2.5",
+              "ip3": "192.0.2.6",
+              "hostname": "us-west-002.whiskergalaxy.com",
+              "weight": 1,
+              "force_disconnect": 1
+            },
+            {
+              "ip": "192.0.2.7",
+              "ip2": "192.0.2.8",
+              "ip3": "192.0.2.9",
+              "hostname": "us-west-003.whiskergalaxy.com",
+              "weight": 2,
+              "force_disconnect": null
             }
           ]
         }
@@ -70,8 +121,10 @@
           "nick": "Sausage",
           "pro": 0,
           "ping_ip": "185.230.124.1",
+          "ping_host": "http://de-001.whiskergalaxy.com:6464/latency",
           "wg_pubkey": "dE3fG4hI5jK6lM7nO8pQ9rS0tU1vW2xY3zA4bC5dE=",
           "health": 8,
+          "link_speed": "1000",
           "nodes": [
             {
               "ip": "185.230.124.1",
@@ -79,7 +132,7 @@
               "ip3": "185.230.124.3",
               "hostname": "de-001.whiskergalaxy.com",
               "weight": 1,
-              "force_disconnect": 0
+              "force_disconnect": null
             }
           ]
         },
@@ -89,8 +142,10 @@
           "nick": "Brandenburg",
           "pro": 0,
           "ping_ip": "185.230.125.1",
+          "ping_host": "http://de-002.whiskergalaxy.com:6464/latency",
           "wg_pubkey": "fG4hI5jK6lM7nO8pQ9rS0tU1vW2xY3zA4bC5dE6fG=",
           "health": -1,
+          "link_speed": "10000",
           "nodes": [
             {
               "ip": "185.230.125.1",
@@ -98,7 +153,7 @@
               "ip3": "185.230.125.3",
               "hostname": "de-002.whiskergalaxy.com",
               "weight": 1,
-              "force_disconnect": 1
+              "force_disconnect": null
             }
           ]
         }
@@ -118,8 +173,10 @@
           "nick": "Sakura",
           "pro": 0,
           "ping_ip": "103.152.220.1",
+          "ping_host": "http://jp-001.whiskergalaxy.com:6464/latency",
           "wg_pubkey": "hI5jK6lM7nO8pQ9rS0tU1vW2xY3zA4bC5dE6fG7hI=",
           "health": 3,
+          "link_speed": "10000",
           "nodes": [
             {
               "ip": "103.152.220.1",
@@ -127,7 +184,7 @@
               "ip3": "103.152.220.3",
               "hostname": "jp-001.whiskergalaxy.com",
               "weight": 1,
-              "force_disconnect": 0
+              "force_disconnect": null
             }
           ]
         }

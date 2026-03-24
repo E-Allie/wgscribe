@@ -61,45 +61,95 @@ get_server() {
 	country_input="$1"
 	city_input="$2"
 
-	location="$(printf '%s' "$serverlist" | jq -r --arg q "$country_input" '
+	locations="$(printf '%s' "$serverlist" | jq --arg q "$country_input" '[
 		.data[] | select(
 			(.country_code | ascii_downcase) == ($q | ascii_downcase) or
 			(.short_name | ascii_downcase) == ($q | ascii_downcase) or
 			(.name | ascii_downcase | test($q | ascii_downcase))
-		)' | jq -s '.[0]')"
+		)]')"
 
-	if [ -z "$location" ] || [ "$location" = "null" ]; then
+	if [ "$(printf '%s' "$locations" | jq 'length')" = "0" ]; then
 		print_error "No servers found for: $1"
 		return 1
 	fi
 
-	server_country="$(printf '%s' "$location" | jq -r '.name')"
+	server_country="$(printf '%s' "$locations" | jq -r '.[0].name')"
+
+	# Merge groups from ALL matching sub-locations into one array
+	groups="$(printf '%s' "$locations" | jq '[.[].groups[]]')"
 
 	if [ -n "$city_input" ]; then
-		groups="$(printf '%s' "$location" | jq -r --arg city "$city_input" '
-			.groups[] | select(.city | ascii_downcase | test($city | ascii_downcase))' | jq -s '.')"
-		if [ "$(printf '%s' "$groups" | jq -r 'length')" = "0" ]; then
+		groups="$(printf '%s' "$groups" | jq --arg city "$city_input" '
+			[.[] | select(.city | ascii_downcase | test($city | ascii_downcase))]')"
+		if [ "$(printf '%s' "$groups" | jq 'length')" = "0" ]; then
 			print_error "No city matching '$city_input' found in $server_country"
 			print_error "Try: wgscribe c $country_input (without city) to see available servers"
 			return 1
 		fi
-	else
-		groups="$(printf '%s' "$location" | jq -r '.groups')"
 	fi
 
-	best_group="$(printf '%s' "$groups" | jq -r '
-		[.[] | select(.health >= 0 and (.nodes | map(select(.force_disconnect != 1)) | length) > 0)]
-		| sort_by(.health) | .[0]')"
+	# Filter to groups with at least one connectable node
+	valid_groups="$(printf '%s' "$groups" | jq '[.[] | select(
+		(.nodes // [] | map(select(.force_disconnect != 1)) | length) > 0)]')"
 
-	if [ -z "$best_group" ] || [ "$best_group" = "null" ]; then
-		best_group="$(printf '%s' "$groups" | jq -r '.[0]')"
+	if [ "$(printf '%s' "$valid_groups" | jq 'length')" = "0" ]; then
+		print_error "No valid WireGuard nodes found for: $1"
+		return 1
+	fi
+
+	if [ -n "$city_input" ]; then
+		# City specified: skip latency, use first valid group (already city-filtered above)
+		best_group="$(printf '%s' "$valid_groups" | jq -r '.[0]')"
+	else
+		# No city: measure latency to all groups, pick lowest
+		print "Measuring latency..."
+		tmpdir="$(mktemp -d)"
+		trap 'rm -rf "$tmpdir"' EXIT INT TERM
+
+		group_count="$(printf '%s' "$valid_groups" | jq 'length')"
+		idx=0
+		while [ "$idx" -lt "$group_count" ]; do
+			ping_host="$(printf '%s' "$valid_groups" | jq -r ".[$idx].ping_host")"
+			if [ -n "$ping_host" ] && [ "$ping_host" != "null" ]; then
+				(curl -s -o /dev/null -w "%{time_total}" \
+					--connect-timeout 2 --max-time 3 \
+					"$ping_host" > "$tmpdir/$idx" 2>/dev/null) &
+			fi
+			idx=$((idx + 1))
+		done
+		wait
+
+		# Find group index with lowest latency
+		best_idx=0
+		best_lat=""
+		idx=0
+		while [ "$idx" -lt "$group_count" ]; do
+			if [ -f "$tmpdir/$idx" ]; then
+				lat="$(cat "$tmpdir/$idx")"
+				if [ -n "$lat" ] && [ "$lat" != "0.000000" ]; then
+					if [ -z "$best_lat" ] || \
+						awk -v a="$lat" -v b="$best_lat" 'BEGIN{exit !(a < b)}'; then
+						best_lat="$lat"
+						best_idx="$idx"
+					fi
+				fi
+			fi
+			idx=$((idx + 1))
+		done
+
+		best_group="$(printf '%s' "$valid_groups" | jq -r ".[$best_idx]")"
 	fi
 
 	server_pubkey="$(printf '%s' "$best_group" | jq -r '.wg_pubkey')"
 	server_city="$(printf '%s' "$best_group" | jq -r '.city')"
 
+	# Weighted random node selection
 	server_ip="$(printf '%s' "$best_group" | jq -r '
-		.nodes | map(select(.force_disconnect != 1)) | .[0].ip3')"
+		[.nodes[] | select(.force_disconnect != 1)] |
+		to_entries[] | "\(.value.weight)\t\(.value.ip3)"' |
+		awk 'BEGIN{srand(); r=rand()}
+		     {w[NR]=$1; v[NR]=$2; total+=$1}
+		     END{r*=total; cum=0; for(i=1;i<=NR;i++){cum+=w[i]; if(r<=cum){print v[i]; exit}}}')"
 
 	if [ -z "$server_ip" ] || [ "$server_ip" = "null" ]; then
 		print_error "No valid WireGuard nodes found for: $1"
