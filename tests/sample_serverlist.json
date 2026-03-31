@@ -189,6 +189,68 @@
           ]
         }
       ]
+    },
+    {
+      "id": 99,
+      "name": "Australia",
+      "country_code": "AU",
+      "short_name": "AU",
+      "premium_only": 0,
+      "p2p": 1,
+      "groups": [
+        {
+          "id": 501,
+          "city": "Sydney",
+          "nick": "Eshay",
+          "pro": 0,
+          "ping_ip": "103.1.212.1",
+          "ping_host": "http://au-sydney-001.whiskergalaxy.com:6464/latency",
+          "wg_pubkey": "aU5tRaLiA1kEy2wGpUbKeY3xYz4aBcDeF5gHiJkL6=",
+          "health": 3,
+          "link_speed": "10000",
+          "nodes": [
+            {
+              "ip": "103.1.212.1",
+              "ip2": "103.1.212.2",
+              "ip3": "103.1.212.3",
+              "hostname": "au-sydney-001.whiskergalaxy.com",
+              "weight": 1,
+              "force_disconnect": null
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 100,
+      "name": "Austria",
+      "country_code": "AT",
+      "short_name": "AT",
+      "premium_only": 0,
+      "p2p": 1,
+      "groups": [
+        {
+          "id": 502,
+          "city": "Vienna",
+          "nick": "Hofburg",
+          "pro": 0,
+          "ping_ip": "95.177.87.1",
+          "ping_host": "http://at-vienna-001.whiskergalaxy.com:6464/latency",
+          "wg_pubkey": "aT5tRiA1kEy2wGpUbKeY3xYz4aBcDeF5gHiJkL6m=",
+          "health": 4,
+          "link_speed": "10000",
+          "nodes": [
+            {
+              "ip": "95.177.87.1",
+              "ip2": "95.177.87.2",
+              "ip3": "95.177.87.3",
+              "hostname": "at-vienna-001.whiskergalaxy.com",
+              "weight": 1,
+              "force_disconnect": null
+            }
+          ]
+        }
+      ]
     }
   ]
 }

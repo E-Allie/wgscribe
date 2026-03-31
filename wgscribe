@@ -28,6 +28,7 @@ login() {
 		--arg dns "$dns" \
 		'{"private_key":$pk,"preshared_key":$psk,"address":$addr,"dns":$dns}' \
 		> "$conf_dir/credentials.json"
+	chmod 600 "$conf_dir/credentials.json"
 	print "Credentials imported successfully"
 	print "Address: $address"
 }
@@ -49,8 +50,9 @@ is_connected() {
 
 get_server() {
 	# $1 = country input (code, name, or short_name)
-	# $2 = optional city filter
-	# Sets: server_pubkey, server_ip, server_city, server_country
+	# $2 = optional city/nick filter
+	# $3 = optional prefer_10g flag (1 = prefer 10Gbps servers)
+	# Sets: server_pubkey, server_ip, server_city, server_nick, server_country
 	# Returns: 0 on success, 1 on failure
 	serverlist="$(curl -s "https://assets.windscribe.com/serverlist/mob-v2/1/$(date +%s)")"
 	if [ -z "$serverlist" ]; then
@@ -60,13 +62,21 @@ get_server() {
 
 	country_input="$1"
 	city_input="$2"
+	prefer_10g="${3:-}"
 
 	locations="$(printf '%s' "$serverlist" | jq --arg q "$country_input" '[
 		.data[] | select(
 			(.country_code | ascii_downcase) == ($q | ascii_downcase) or
-			(.short_name | ascii_downcase) == ($q | ascii_downcase) or
-			(.name | ascii_downcase | test($q | ascii_downcase))
+			(.short_name | ascii_downcase) == ($q | ascii_downcase)
 		)]')"
+
+	# Phase 2: if no exact match, fall back to name substring
+	if [ "$(printf '%s' "$locations" | jq 'length')" = "0" ]; then
+		locations="$(printf '%s' "$serverlist" | jq --arg q "$country_input" '[
+			.data[] | select(
+				.name | ascii_downcase | test($q | ascii_downcase)
+			)]')"
+	fi
 
 	if [ "$(printf '%s' "$locations" | jq 'length')" = "0" ]; then
 		print_error "No servers found for: $1"
@@ -78,10 +88,13 @@ get_server() {
 	groups="$(printf '%s' "$locations" | jq '[.[] | .name as $loc | .groups[] | . + {_location_name: $loc}]')"
 
 	if [ -n "$city_input" ]; then
-		groups="$(printf '%s' "$groups" | jq --arg city "$city_input" '
-			[.[] | select(.city | ascii_downcase | test($city | ascii_downcase))]')"
+		groups="$(printf '%s' "$groups" | jq --arg q "$city_input" '
+			[.[] | select(
+				(.city | ascii_downcase | test($q | ascii_downcase)) or
+				(.nick | ascii_downcase | test($q | ascii_downcase))
+			)]')"
 		if [ "$(printf '%s' "$groups" | jq 'length')" = "0" ]; then
-			print_error "No city matching '$city_input' found for: $country_input"
+			print_error "No city or server matching '$city_input' found for: $country_input"
 			print_error "Try: wgscribe c $country_input (without city) to see available servers"
 			return 1
 		fi
@@ -94,6 +107,16 @@ get_server() {
 	if [ "$(printf '%s' "$valid_groups" | jq 'length')" = "0" ]; then
 		print_error "No valid WireGuard nodes found for: $1"
 		return 1
+	fi
+
+	# If prefer_10g is set, filter to 10Gbps groups first
+	if [ "$prefer_10g" = "1" ]; then
+		teng_groups="$(printf '%s' "$valid_groups" | jq '[.[] | select(.link_speed == "10000")]')"
+		if [ "$(printf '%s' "$teng_groups" | jq 'length')" != "0" ]; then
+			valid_groups="$teng_groups"
+		else
+			print "No 10Gbps servers available, using all servers..."
+		fi
 	fi
 
 	if [ -n "$city_input" ]; then
@@ -141,7 +164,16 @@ get_server() {
 
 	server_pubkey="$(printf '%s' "$best_group" | jq -r '.wg_pubkey')"
 	server_city="$(printf '%s' "$best_group" | jq -r '.city')"
+	server_nick="$(printf '%s' "$best_group" | jq -r '.nick')"
 	server_country="$(printf '%s' "$best_group" | jq -r '._location_name')"
+
+	# Warn if prefer_10g was requested but selected server is not 10Gbps
+	if [ "$prefer_10g" = "1" ]; then
+		group_speed="$(printf '%s' "$best_group" | jq -r '.link_speed')"
+		if [ "$group_speed" != "10000" ]; then
+			print "Note: $server_city/$server_nick is a 1Gbps server"
+		fi
+	fi
 
 	# Weighted random node selection
 	server_ip="$(printf '%s' "$best_group" | jq -r '
@@ -169,12 +201,13 @@ connect() {
 	port=443
 	country=""
 	city=""
+	prefer_10g=""
 	while [ $# -gt 0 ]; do
 		case "$1" in
-			-f) shift ;;
+			-g|--prefer-10g) prefer_10g=1; shift ;;
 			-n) dont_act=1; shift ;;
-			-o) out_file="$2"; shift 2 ;;
-			-p) port="$2"; shift 2 ;;
+			-o) [ -z "$2" ] && { print_error "Missing argument for -o"; exit 1; }; out_file="$2"; shift 2 ;;
+			-p) [ -z "$2" ] && { print_error "Missing argument for -p"; exit 1; }; port="$2"; shift 2 ;;
 			-*) exit 1 ;;
 			*)
 				if [ -z "$country" ]; then
@@ -188,7 +221,7 @@ connect() {
 	[ -z "$country" ] && help
 
 	print "Finding best server..."
-	get_server "$country" "$city" || exit 1
+	get_server "$country" "$city" "$prefer_10g" || exit 1
 
 	privkey="$(jq -j '.private_key' "$conf_dir/credentials.json")"
 	preshared_key="$(jq -j '.preshared_key' "$conf_dir/credentials.json")"
@@ -206,7 +239,7 @@ connect() {
 		"$conf_dir/template.conf" > "$out_file"
 
 	if [ ! "$dont_act" ]; then
-		print "Connecting to $server_city ($server_country)..."
+		print "Connecting to $server_city/$server_nick ($server_country)..."
 		if is_connected; then
 			wg-quick strip wgscribe | wg setconf wgscribe /dev/stdin
 			wg set wgscribe fwmark 0xca6c
@@ -216,7 +249,7 @@ connect() {
 		fi && print "Connected successfully!"
 	else
 		print "Config written to $out_file"
-		print "Server: $server_city ($server_country) — $endpoint"
+		print "Server: $server_city/$server_nick ($server_country) — $endpoint"
 	fi
 }
 
@@ -243,7 +276,8 @@ login:
 connect:
     wgscribe c us
     wgscribe c us atlanta
-    -f            Force server list refresh
+    wgscribe c au Eshay      (connect by server nickname)
+    -g, --prefer-10g  Prefer 10Gbps servers
     -n            Don't connect, just generate config
     -o out.conf   Write config to different file
     -p port       Use specific port (default: 443)
