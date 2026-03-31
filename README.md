@@ -10,7 +10,8 @@ login:
 connect:
     wgscribe c us
     wgscribe c us atlanta
-    -f            Force server list refresh
+    wgscribe c au Eshay      (connect by server nickname)
+    -g, --prefer-10g  Prefer 10Gbps servers
     -n            Don't connect, just generate config
     -o out.conf   Write config to different file
     -p port       Use specific port (default: 443)
@@ -75,6 +76,16 @@ Connect to a specific city:
 sudo wgscribe c us atlanta
 ```
 
+Connect by server nickname:
+```
+sudo wgscribe c au Eshay
+```
+
+Prefer 10Gbps servers:
+```
+sudo wgscribe c us -g
+```
+
 Use a specific port (default is 443):
 ```
 sudo wgscribe c de -p 53
@@ -85,7 +96,7 @@ To disconnect:
 sudo wgscribe d
 ```
 
-Country names and codes are case-insensitive. See `countries.txt` for a list of available locations.
+Country names and codes are case-insensitive. You can also search by full name (e.g., `wgscribe c germany`). See `countries.txt` for a list of available locations.
 
 ## Extra
 This script includes a kill-switch because of the way wg-quick works. Connections will typically stay alive for multiple days, but if it dies you can reconnect by running another connect command.
