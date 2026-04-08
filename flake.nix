@@ -16,5 +16,9 @@
           wgscribe = pkgs.callPackage ./package.nix { };
           default = self.packages.${system}.wgscribe;
         });
+
+      overlays.default = final: prev: {
+        wgscribe = self.packages.${prev.stdenv.hostPlatform.system}.wgscribe;
+      };
     };
 }
